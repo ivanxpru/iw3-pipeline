@@ -6,6 +6,10 @@
 set -euo pipefail
 
 export NUNIF_HOME=/workspace/nunif_home
+# VDA_L лежит в /opt/iw3-home/torch_hub/hub/checkpoints (см. Dockerfile);
+# TORCH_HOME направляет torch.hub.load_state_dict_from_url туда же,
+# иначе VDA_L попытается докачаться в /root/.cache/torch.
+export TORCH_HOME=/opt/iw3-home/torch_hub
 
 mkdir -p /workspace/input /workspace/output /workspace/logs /workspace/scripts
 

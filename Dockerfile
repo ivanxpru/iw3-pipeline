@@ -74,6 +74,24 @@ RUN cd /opt/nunif && /opt/venv/bin/python -m iw3.update_hub
 RUN cd /opt/nunif && /opt/venv/bin/python -m iw3.download_models
 RUN cd /opt/nunif && /opt/venv/bin/python -c "from iw3.depth_model_factory import create_depth_model; m=create_depth_model('Any_V3_Mono'); m.load(gpu=-1); print('DA3 checkpoint:', m.get_model_path('Any_V3_Mono'))"
 
+# ---------- VDA_L (Video Depth Anything Large) ----------
+# 08.11.2026: добавлен для борьбы с «завихрением фона» при движении объекта.
+# VDA — temporal-стабильная depth (память между кадрами), в отличие от
+# покадровой Any_V3_Mono. Апстрим-форк nagadomi/Video-Depth-Anything_iw3
+# НЕ умеет автокачать vitl/vitb (только vits) — требует файл вручную в
+# torch.hub.get_dir()/checkpoints (= $TORCH_HOME/hub/checkpoints;
+# НЕ зависит от NUNIF_HOME). Имя файла — по hubconf.py форка.
+# Кладём в /opt/iw3-home/torch_hub (не /root/.cache) — Qudata монтирует
+# volume ПОВЕРХ /workspace, но /opt сохраняется в слое образа;
+# entrypoint выставляет TORCH_HOME=/opt/iw3-home/torch_hub.
+RUN mkdir -p /opt/iw3-home/torch_hub/hub/checkpoints && \
+    cd /opt/iw3-home/torch_hub/hub/checkpoints && \
+    wget -c -q --tries=0 --timeout=60 \
+        "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/resolve/main/video_depth_anything_vitl.pth?download=true" \
+        -O video_depth_anything_vitl.pth && \
+    stat -c '%s %n' video_depth_anything_vitl.pth && \
+    test "$(stat -c %s video_depth_anything_vitl.pth)" = "1538392012"
+
 # Стерео/inpaint/AA чекпойнты: маленькие, но без них первый запуск лезет в сеть.
 # Все URL — из iw3/stereo_model_factory.py, iw3/inpaint_utils.py, iw3/models/depth_aa.py.
 RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
