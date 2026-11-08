@@ -16,7 +16,30 @@
 
 **Почему `/opt`, а не `/workspace`:** Qudata монтирует volume поверх `/workspace`, всё из слоя образа скрывается. `entrypoint.sh` делает `cp -rn` в `/workspace` и создаёт симлинк `/opt/venv → /workspace/venv` (shebang'ы pip-скриптов указывают на `/opt/venv`).
 
+## NVENC: два обязательных условия
+
+1. **`NVIDIA_DRIVER_CAPABILITIES=all`** — задано в Dockerfile. Базовый образ
+   `nvidia/cuda:12.6.3-base-ubuntu24.04` по умолчанию ставит `compute,utility`
+   (без `video`); Qudata не всегда переопределяет его на `all`. Без этого
+   `/dev/nvidia-encode*` не монтируются и NVENC мёртв даже на драйвере 580.
+2. **Драйвер ≥560** — PyAV 19.0.2 несёт FFmpeg 9, который не открывает
+   `avcodec_open2("hevc_nvenc")` на 535/550 (`NotImplementedError`), хотя
+   системный ffmpeg 6.1 при этом кодирует. `has_nvenc()` в iw3 врёт: он
+   проверяет только наличие кодека в `av.codecs_available`.
+
+Проверка сразу после аренды (до установки стека и закачки видео):
+
+```bash
+nvidia-smi --query-gpu=driver_version --format=csv,noheader
+echo "$NVIDIA_DRIVER_CAPABILITIES"
+python -c "import av; c=av.CodecContext.create('hevc_nvenc','w'); c.width=640; c.height=360; c.pix_fmt='yuv420p'; c.open(); print('NVENC OK')"
+```
+
+Не выполняется хотя бы одно → гасить инстанс и брать другой оффер.
+
 ## Сборка
+
+Правки в `Dockerfile` попадают на инстансы **только после `git push` в `main`**: workflow `.github/workflows/docker-publish.yml` собирает и пушит `ivanxphub/iw3-pipeline:latest` + `:<sha>` (или `workflow_dispatch`). Локально не собирать — на proliant legacy-builder без buildx тихо умирает. Пока пуша не было, аренда использует прежний образ, и `NVIDIA_DRIVER_CAPABILITIES=all` даёт **только env шаблона**.
 
 **Только через GitHub Actions** (`.github/workflows/docker-publish.yml`): на локальном proliant legacy-builder без buildx тихо умирает (`memory/docker-lessons.md`). Контекст сборки — **корень этой папки**.
 
@@ -36,10 +59,11 @@ create_template(
   image="ivanxphub/iw3-pipeline", image_tag="latest",
   is_private=true, ssh_enabled=true, ssh_username="root",
   min_storage_gb=50,
-  env_variables={"NUNIF_HOME": "/workspace/nunif_home"})
+  env_variables={"NUNIF_HOME": "/workspace/nunif_home",
+                 "NVIDIA_DRIVER_CAPABILITIES": "all"})
 ```
 
-⚠️ **Не задавать `NVIDIA_DRIVER_CAPABILITIES`** — в заезде 07.11 платформа сама выставила `all` (иначе NVENC может пропасть). `/workspace` не создаётся автоматически — entrypoint делает `mkdir -p`.
+⚠️ **ИСПРАВЛЕНО (08.11.2026):** прежнее «не задавать `NVIDIA_DRIVER_CAPABILITIES`» ошибочно — платформа выставляет `all` не всегда (два заезда 08.11 получили `compute,utility` и мёртвый NVENC). Теперь **`all` задано и в Dockerfile, и в `create_template`** (дублирование на случай, если платформа перекрывает ENV образа; достоверно это не подтверждено). Пока **`ivanxphub/iw3-pipeline:latest` не пересобран**, работает только переменная шаблона: используйте **`iw3-pipeline-nvenc` = `6aefd1f8bdea72d60d010ada`**, а не старый `iw3-pipeline` (`6aef20c6b7ade1a05d8750ca`). После `git push` в `main` GH Actions пересоберёт образ (workflow `docker-publish.yml`), и Dockerfile станет вторым уровнем защиты. `/workspace` не создаётся автоматически — entrypoint делает `mkdir -p` (⚠️ на Vast-инстансах CMD подменяется `/.launch`, поэтому entrypoint может не запуститься — разворачивать `/opt/*` в `/workspace` вручную, см. заезд 08.11).
 
 ## Использование на инстансе
 

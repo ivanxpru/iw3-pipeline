@@ -23,7 +23,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     NUNIF_HOME=/opt/iw3-home \
-    IW3_COMMIT=b1548e8ff08758f336cdab14443647318ef5e0e9
+    IW3_COMMIT=b1548e8ff08758f336cdab14443647318ef5e0e9 \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# 🚨 NVENC (08.11.2026): базовый nvidia/cuda:12.6.3-base ставит
+# NVIDIA_DRIVER_CAPABILITIES=compute,utility (без video). В заезде 07.11
+# платформа Qudata сама переопределяла его на all, и NVENC работал.
+# 08.11 два инстанса поднялись без переопределения: /dev/nvidia-encode*
+# отсутствуют, `OpenEncodeSessionEx: unsupported device`, PyAV не открывает
+# hevc_nvenc даже на драйвере 580.178.04. Явный ENV в образе гарантирует
+# capability video независимо от платформы. Второе условие — драйвер >=560
+# (встроенный в PyAV 19 FFmpeg 9), см. memory/iw3-experiment.md §8.
+# Шаблон Qudata тоже может задать env, но образ должен быть самодостаточным.
 
 # ---------- Системные пакеты ----------
 # Комментарии НЕ ставить сразу после строки с `\` — shell склейка съест команду
