@@ -55,15 +55,24 @@ git push -u origin main           # → ivanxphub/iw3-pipeline:latest
 
 ```
 create_template(
-  name="iw3-pipeline-full",
+  name="iw3-pipeline-vda",
   image="ivanxphub/iw3-pipeline", image_tag="latest",
   is_private=true, ssh_enabled=true, ssh_username="root",
   min_storage_gb=50,
   env_variables={"NUNIF_HOME": "/workspace/nunif_home",
-                 "NVIDIA_DRIVER_CAPABILITIES": "all"})
+                 "NVIDIA_DRIVER_CAPABILITIES": "all",
+                 "TORCH_HOME": "/opt/iw3-home/torch_hub"})
 ```
 
-⚠️ **ИСПРАВЛЕНО (08.11.2026):** прежнее «не задавать `NVIDIA_DRIVER_CAPABILITIES`» ошибочно — платформа выставляет `all` не всегда (два заезда 08.11 получили `compute,utility` и мёртвый NVENC). Теперь **`all` задано и в Dockerfile, и в `create_template`** (дублирование на случай, если платформа перекрывает ENV образа; достоверно это не подтверждено). Пока **`ivanxphub/iw3-pipeline:latest` не пересобран**, работает только переменная шаблона: используйте **`iw3-pipeline-nvenc` = `6aefd1f8bdea72d60d010ada`**, а не старый `iw3-pipeline` (`6aef20c6b7ade1a05d8750ca`). После `git push` в `main` GH Actions пересоберёт образ (workflow `docker-publish.yml`), и Dockerfile станет вторым уровнем защиты. `/workspace` не создаётся автоматически — entrypoint делает `mkdir -p` (⚠️ на Vast-инстансах CMD подменяется `/.launch`, поэтому entrypoint может не запуститься — разворачивать `/opt/*` в `/workspace` вручную, см. заезд 08.11).
+> **АКТУАЛЬНЫЙ ШАБЛОН (08.11, после коммита `16f69b2` VDA_L):**
+> **`iw3-pipeline-vda` = `6af01a097c9019f1f3a35b59`**.
+> Шаблоны Qudata НЕ обновляются автоматически: у старых
+> `iw3-pipeline` (`6aef20c6b7ade1a05d8750ca`) и `iw3-pipeline-nvenc`
+> (`6aefd1f8bdea72d60d010ada`) нет `TORCH_HOME`, и без него VDA_L
+> не найдётся (форк требует файл в `torch.hub.get_dir()/checkpoints`);
+> докачка в `/root/.cache` тоже сработала бы, но медленнее и стирается при wipe.
+> `NVIDIA_DRIVER_CAPABILITIES=all` в env — страховка (образ тоже содержит его),
+> хотя на 3 хостах из 4 capability всё равно резалась платформой.
 
 ## Использование на инстансе
 
