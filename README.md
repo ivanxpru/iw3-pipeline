@@ -78,7 +78,10 @@ create_template(
 что в gated `apple/DepthPro-checkpoints`. Токен НЕ нужен.
 
 Запасная докачка на инстансе (если вес удалён/битый):
-`bash /workspace/scripts/download-depthpro.sh`.
+`bash /workspace/scripts/download-depthpro.sh` — сначала S3
+(`s3://v2d-storage/models/depth-pro/depth_pro.pt`, нужны ключи:
+`s3-sync.sh env-up`), затем HF. **Напрямую с HF с арендованного сервера
+не полагаться** — канал нестабилен (memory/s3-storage.md).
 
 Файл ищется iw3 по `$NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`
 (`depth_pro_model.py`). Проверка на инстансе:
