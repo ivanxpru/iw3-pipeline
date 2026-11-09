@@ -115,34 +115,21 @@ RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
     done && \
     ls -la && du -sh /opt/iw3-home
 
-# ---------- Depth Pro (gated HF: apple/DepthPro-checkpoints) ----------
+# ---------- Depth Pro ----------
 # 09.11.2026: добавлен для свипа «колки пляшут / ореол над головой» —
 # резкие границы объектов, metric depth, фикс 1536x1536 (см. iw3-next-run.md).
-# ⚠️ Веса GATED на HF (лицензия Apple ML): нужен HF_TOKEN аккаунта, где
-# приняты условия apple/DepthPro-checkpoints. Передаётся build-secret'ом
-# HF_TOKEN в GH Actions; если секрет не задан — шаг пропускается (образ
-# собирается без весов, докачать на инстансе: scripts/download-depthpro.sh).
-# Файл кладём в $NUNIF_HOME-checkpoints (= /opt/iw3-home/iw3/pretrained_models/
-# hub/checkpoints/depth_pro.pt, куда смотрит iw3/depth_models/depth_pro_model.py);
-# entrypoint переносит /opt/iw3-home -> /workspace/nunif_home.
-# Токен читается через RUN --mount=type=secret (workflow передаёт секрет
-# HF_TOKEN через inputs.secrets) — НЕ через build-arg, чтобы токен не осел
-# в history образа.
-RUN --mount=type=secret,id=HF_TOKEN \
-    mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
-    HF_TOKEN_VALUE="$(cat /run/secrets/HF_TOKEN 2>/dev/null || true)" && \
-    if [ -n "$HF_TOKEN_VALUE" ]; then \
-        cd /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
-        wget -c -q --tries=0 --timeout=60 \
-            --header="Authorization: Bearer ${HF_TOKEN_VALUE}" \
-            "https://huggingface.co/apple/DepthPro-checkpoints/resolve/main/depth_pro.pt?download=true" \
-            -O depth_pro.pt && \
-        stat -c '%s %n' depth_pro.pt && \
-        test "$(stat -c %s depth_pro.pt)" -gt 1500000000 && \
-        echo "DepthPro weight baked"; \
-    else \
-        echo "HF_TOKEN not set, skipping DepthPro bake (use /opt/scripts/download-depthpro.sh at runtime)"; \
-    fi
+# Веса открыты в репо apple/DepthPro (gated: false), файл depth_pro.pt,
+# 1 904 446 787 байт — тот же вес, что в gated apple/DepthPro-checkpoints.
+# Кладём в /opt/iw3-home/iw3/pretrained_models/hub/checkpoints/depth_pro.pt
+# (путь из iw3/depth_models/depth_pro_model.py); entrypoint переносит
+# /opt/iw3-home -> /workspace/nunif_home.
+RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
+    cd /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
+    wget -c -q --tries=0 --timeout=60 \
+        "https://huggingface.co/apple/DepthPro/resolve/main/depth_pro.pt?download=true" \
+        -O depth_pro.pt && \
+    stat -c '%s %n' depth_pro.pt && \
+    test "$(stat -c %s depth_pro.pt)" = "1904446787"
 
 # ---------- Sanity на этапе сборки (CUDA недоступна, проверяем импорты/кодеки) ----------
 RUN cd /opt/nunif && /opt/venv/bin/python -c "import torch, av, sys; print('python:', sys.version.split()[0]); print('torch :', torch.__version__, 'cuda', torch.version.cuda); print('av    :', av.__version__); [print('codec', c, ':', c in av.codecs_available) for c in ('hevc_nvenc','h264_nvenc','libx265','libx264')]"

@@ -76,25 +76,20 @@ create_template(
 
 ## Depth Pro (09.11, свип «колки пляшут / ореол над головой»)
 
-Веса Depth Pro (`depth_pro.pt`, ViT-Huge, ~2 ГБ) — **gated** на HuggingFace
-(`apple/DepthPro-checkpoints`, лицензия Apple ML): просто wget из образа нельзя.
-Два пути:
+Веса запечены в образ: `apple/DepthPro` на HF — **открытый** репозиторий
+(gated: false), файл `depth_pro.pt` = 1 904 446 787 байт — тот же вес,
+что в gated `apple/DepthPro-checkpoints`. Токен НЕ нужен.
 
-1. **Запечь в образ (рекомендуется):** принять лицензию на
-   `https://huggingface.co/apple/DepthPro-checkpoints`, создать fine-grained
-   токен (read на этот репо), добавить секрет **`HF_TOKEN`** в репозиторий
-   `iw3-pipeline` на GitHub → пересборка запечёт вес в слой.
-   Токен передаётся build-secret'ом (`secrets:` в workflow +
-   `RUN --mount=type=secret`) и НЕ попадает в history образа.
-2. **Докачать на инстансе:** `HF_TOKEN=hf_xxx bash /workspace/scripts/download-depthpro.sh`
-   (кладёт в `$NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`).
+Запасная докачка на инстансе (если вес удалён/битый):
+`bash /workspace/scripts/download-depthpro.sh`.
 
 Файл ищется iw3 по `$NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`
 (`depth_pro_model.py`). Проверка на инстансе:
 `ls -la /workspace/nunif_home/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`.
 Запуск: `python -m iw3 ... --depth-model DepthPro` (без `--resolution` и без
 `--depth-aa` — не поддерживаются, фикс 1536×1536), план — `memory/iw3-next-run.md`.
-
+Примечание: код ml-depth-pro — MIT; лицензия весов — Apple AMLR
+(текст — `LICENSE` в репо apple/DepthPro).
 ## Использование на инстансе
 
 ```bash
