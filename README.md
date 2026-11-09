@@ -64,15 +64,12 @@ create_template(
                  "TORCH_HOME": "/opt/iw3-home/torch_hub"})
 ```
 
-> **АКТУАЛЬНЫЙ ШАБЛОН (08.11, после коммита `16f69b2` VDA_L):**
-> **`iw3-pipeline-vda` = `6af01a097c9019f1f3a35b59`**.
-> Шаблоны Qudata НЕ обновляются автоматически: у старых
-> `iw3-pipeline` (`6aef20c6b7ade1a05d8750ca`) и `iw3-pipeline-nvenc`
-> (`6aefd1f8bdea72d60d010ada`) нет `TORCH_HOME`, и без него VDA_L
-> не найдётся (форк требует файл в `torch.hub.get_dir()/checkpoints`);
-> докачка в `/root/.cache` тоже сработала бы, но медленнее и стирается при wipe.
-> `NVIDIA_DRIVER_CAPABILITIES=all` в env — страховка (образ тоже содержит его),
-> хотя на 3 хостах из 4 capability всё равно резалась платформой.
+> **АКТУАЛЬНЫЙ ШАБЛОН (09.11, после коммита `75e3936` DepthPro):**
+> **`iw3-pipeline-depthpro` = `6af13aeb7c9019f1f3a36cfe`**.
+> Веса Depth Pro (`depth_pro.pt`, 1.9 ГБ) запечены, `--depth-model DepthPro` готов.
+> Старые: `iw3-pipeline-vda` (`6af01a097c9019f1f3a35b59`), `iw3-pipeline`
+> (`6aef20c6b7ade1a05d8750ca`), `iw3-pipeline-nvenc` (`6aefd1f8bdea72d60d010ada`).
+> Шаблоны Qudata НЕ обновляются автоматически. `NVIDIA_DRIVER_CAPABILITIES=all`
 
 ## Depth Pro (09.11, свип «колки пляшут / ореол над головой»)
 
