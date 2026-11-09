@@ -74,6 +74,27 @@ create_template(
 > `NVIDIA_DRIVER_CAPABILITIES=all` в env — страховка (образ тоже содержит его),
 > хотя на 3 хостах из 4 capability всё равно резалась платформой.
 
+## Depth Pro (09.11, свип «колки пляшут / ореол над головой»)
+
+Веса Depth Pro (`depth_pro.pt`, ViT-Huge, ~2 ГБ) — **gated** на HuggingFace
+(`apple/DepthPro-checkpoints`, лицензия Apple ML): просто wget из образа нельзя.
+Два пути:
+
+1. **Запечь в образ (рекомендуется):** принять лицензию на
+   `https://huggingface.co/apple/DepthPro-checkpoints`, создать fine-grained
+   токен (read на этот репо), добавить секрет **`HF_TOKEN`** в репозиторий
+   `iw3-pipeline` на GitHub → пересборка запечёт вес в слой.
+   Токен передаётся build-secret'ом (`secrets:` в workflow +
+   `RUN --mount=type=secret`) и НЕ попадает в history образа.
+2. **Докачать на инстансе:** `HF_TOKEN=hf_xxx bash /workspace/scripts/download-depthpro.sh`
+   (кладёт в `$NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`).
+
+Файл ищется iw3 по `$NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`
+(`depth_pro_model.py`). Проверка на инстансе:
+`ls -la /workspace/nunif_home/iw3/pretrained_models/hub/checkpoints/depth_pro.pt`.
+Запуск: `python -m iw3 ... --depth-model DepthPro` (без `--resolution` и без
+`--depth-aa` — не поддерживаются, фикс 1536×1536), план — `memory/iw3-next-run.md`.
+
 ## Использование на инстансе
 
 ```bash
