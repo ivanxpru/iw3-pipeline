@@ -11,7 +11,10 @@ export NUNIF_HOME=/workspace/nunif_home
 # иначе VDA_L попытается докачаться в /root/.cache/torch.
 export TORCH_HOME=/opt/iw3-home/torch_hub
 
-mkdir -p /workspace/input /workspace/output /workspace/logs /workspace/scripts
+# mkdir ОБЯЗАТЕЛЕН: `cp -rn src/. dest/` падает, если dest не существует,
+# а `|| true` это молча глотает → на чистом volume стек «пропадает» (баг 10.11).
+mkdir -p /workspace/input /workspace/output /workspace/logs /workspace/scripts \
+         /workspace/venv /workspace/nunif /workspace/nunif_home
 
 # cp -rn: не трогаем то, что уже есть (например, докачано с S3 в прошлой сессии).
 [ -d /opt/venv ]      && cp -rn /opt/venv/.      /workspace/venv/      2>/dev/null || true
@@ -21,6 +24,27 @@ mkdir -p /workspace/input /workspace/output /workspace/logs /workspace/scripts
 
 # Обрывки wget / пустые файлы от прошлых заездов не должны считаться готовыми весами.
 find /workspace/nunif_home -type f -size 0 -delete 2>/dev/null || true
+
+# GeForce + compat = CUDA error 804: compat libcuda (для datacenter) перекрывает
+# системный драйвер через ldconfig. На инстансе с GeForce compat не нужен.
+if [ -d /usr/local/cuda-12.6/compat ] && nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | grep -qi geforce; then
+    mv /usr/local/cuda-12.6/compat /usr/local/cuda-12.6/compat.disabled 2>/dev/null || true
+    ldconfig 2>/dev/null || true
+fi
+
+# Depth Pro: апстрим-флаг консервативный (покадровый инференс через видео-пайплайн
+# работает — проверено 09.11 и 10.11).
+DPM=/workspace/nunif/iw3/depth_models/depth_pro_model.py
+if [ -f "$DPM" ] && grep -A1 "def is_video_supported" "$DPM" | grep -q "return False"; then
+    sed -i -E "s/(def is_video_supported\(self\):\n[ \t]*)return False/\1return True/" "$DPM" 2>/dev/null \
+      || python3 - "$DPM" <<'PYEOF'
+import sys, re
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace("def is_video_supported(self):\n        return False", "def is_video_supported(self):\n        return True")
+open(p, "w").write(s)
+PYEOF
+fi
 
 # venv создавался в /opt/venv, поэтому shebang'ы внутри указывают на старый путь.
 # Лечим симлинком, чтобы `source /workspace/venv/bin/activate` работал без пересборки.
