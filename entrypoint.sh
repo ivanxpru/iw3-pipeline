@@ -32,19 +32,7 @@ if [ -d /usr/local/cuda-12.6/compat ] && nvidia-smi --query-gpu=name --format=cs
     ldconfig 2>/dev/null || true
 fi
 
-# Depth Pro: апстрим-флаг консервативный (покадровый инференс через видео-пайплайн
-# работает — проверено 09.11 и 10.11).
-DPM=/workspace/nunif/iw3/depth_models/depth_pro_model.py
-if [ -f "$DPM" ] && grep -A1 "def is_video_supported" "$DPM" | grep -q "return False"; then
-    sed -i -E "s/(def is_video_supported\(self\):\n[ \t]*)return False/\1return True/" "$DPM" 2>/dev/null \
-      || python3 - "$DPM" <<'PYEOF'
-import sys, re
-p = sys.argv[1]
-s = open(p).read()
-s = s.replace("def is_video_supported(self):\n        return False", "def is_video_supported(self):\n        return True")
-open(p, "w").write(s)
-PYEOF
-fi
+# 11.11.2026: патч Depth Pro (is_video_supported) удалён вместе с моделью из образа.
 
 # venv создавался в /opt/venv, поэтому shebang'ы внутри указывают на старый путь.
 # Лечим симлинком, чтобы `source /workspace/venv/bin/activate` работал без пересборки.

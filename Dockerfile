@@ -66,12 +66,11 @@ RUN /opt/venv/bin/pip install --no-cache-dir -r /opt/nunif/requirements.txt
 RUN /opt/venv/bin/pip install --no-cache-dir boto3
 
 # ---------- Прогрев torch.hub + чекпойнтов (без GPU!) ----------
-# update_hub качает zipball'ы форков ZoeDepth/MiDaS/Depth-Anything/DA3_iw3/VDA/pro.
-# download_models тянет ZoeD_Any_N (~1.34 ГБ) — дефолтную depth-модель iw3.
-# DA3MONO-LARGE грузим через create_depth_model(...).load(gpu=-1): форк hubconf
-# кладёт model.safetensors в $NUNIF_HOME/iw3/pretrained_models/hub/checkpoints/.
+# update_hub качает zipball'ы форков ZoeDepth/MiDaS/Depth-Anything/DA3_iw3/VDA (код, мегабайты).
+# 11.11.2026: iw3.download_models (ZoeD_Any_N ~1.34 ГБ) УДАЛЁН — дефолтную модель
+# никогда не используем (всегда явный --depth-model), а раздувание образа
+# ломало развёртывание на Qudata (таймаут ~15 мин). Any_V3_Mono грузим как раньше.
 RUN cd /opt/nunif && /opt/venv/bin/python -m iw3.update_hub
-RUN cd /opt/nunif && /opt/venv/bin/python -m iw3.download_models
 RUN cd /opt/nunif && /opt/venv/bin/python -c "from iw3.depth_model_factory import create_depth_model; m=create_depth_model('Any_V3_Mono'); m.load(gpu=-1); print('DA3 checkpoint:', m.get_model_path('Any_V3_Mono'))"
 
 # ---------- VDA_L (Video Depth Anything Large) ----------
@@ -115,21 +114,11 @@ RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
     done && \
     ls -la && du -sh /opt/iw3-home
 
-# ---------- Depth Pro ----------
-# 09.11.2026: добавлен для свипа «колки пляшут / ореол над головой» —
-# резкие границы объектов, metric depth, фикс 1536x1536 (см. iw3-next-run.md).
-# Веса открыты в репо apple/DepthPro (gated: false), файл depth_pro.pt,
-# 1 904 446 787 байт — тот же вес, что в gated apple/DepthPro-checkpoints.
-# Кладём в /opt/iw3-home/iw3/pretrained_models/hub/checkpoints/depth_pro.pt
-# (путь из iw3/depth_models/depth_pro_model.py); entrypoint переносит
-# /opt/iw3-home -> /workspace/nunif_home.
-RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
-    cd /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
-    wget -c -q --tries=0 --timeout=60 \
-        "https://huggingface.co/apple/DepthPro/resolve/main/depth_pro.pt?download=true" \
-        -O depth_pro.pt && \
-    stat -c '%s %n' depth_pro.pt && \
-    test "$(stat -c %s depth_pro.pt)" = "1904446787"
+# Depth Pro УДАЛЁН из образа 11.11.2026 (−1.9 ГБ): модель отклонена вердиктом
+# пользователя (10–11.11, «края плывущие, колки пляшут»), а образ не успевал
+# разворачиваться на Qudata за таймаут ~15 мин. Если когда-нибудь понадобится —
+# веса лежат в S3: s3://v2d-storage/models/depth-pro/depth_pro.pt (1 904 446 787 Б),
+# класть в /opt/iw3-home/iw3/pretrained_models/hub/checkpoints/depth_pro.pt.
 
 # ---------- Sanity на этапе сборки (CUDA недоступна, проверяем импорты/кодеки) ----------
 RUN cd /opt/nunif && /opt/venv/bin/python -c "import torch, av, sys; print('python:', sys.version.split()[0]); print('torch :', torch.__version__, 'cuda', torch.version.cuda); print('av    :', av.__version__); [print('codec', c, ':', c in av.codecs_available) for c in ('hevc_nvenc','h264_nvenc','libx265','libx264')]"
