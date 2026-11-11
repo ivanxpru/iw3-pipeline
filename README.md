@@ -64,11 +64,13 @@ create_template(
                  "TORCH_HOME": "/opt/iw3-home/torch_hub"})
 ```
 
-> **АКТУАЛЬНЫЙ ШАБЛОН (09.11, после коммита `75e3936` DepthPro):**
-> **`iw3-pipeline-depthpro` = `6af13aeb7c9019f1f3a36cfe`**.
-> Веса Depth Pro (`depth_pro.pt`, 1.9 ГБ) запечены, `--depth-model DepthPro` готов.
-> Старые: `iw3-pipeline-vda` (`6af01a097c9019f1f3a35b59`), `iw3-pipeline`
-> (`6aef20c6b7ade1a05d8750ca`), `iw3-pipeline-nvenc` (`6aefd1f8bdea72d60d010ada`).
+> **АКТУАЛЬНЫЙ ШАБЛОН (11.11, образ с коммитами `b807bcf`+`1e4f3ee`):
+> `iw3-pipeline-v2` = `6af3d629596b1fe98eb52684`** — entrypoint сам:
+> mkdir-фикс /opt→/workspace, отключение CUDA-compat на GeForce, авто-патч
+> DepthPro video-mode, `scripts/denoise-source.sh` на борту. Аренда = моментальный старт.
+> Старые: `iw3-pipeline-depthpro` (`6af13aeb7c9019f1f3a36cfe`), `iw3-pipeline-vda`
+> (`6af01a097c9019f1f3a35b59`), `iw3-pipeline` (`6aef20c6b7ade1a05d8750ca`),
+> `iw3-pipeline-nvenc` (`6aefd1f8bdea72d60d010ada`).
 > Шаблоны Qudata НЕ обновляются автоматически. `NVIDIA_DRIVER_CAPABILITIES=all`
 
 ## Depth Pro (09.11, свип «колки пляшут / ореол над головой»)
