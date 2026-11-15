@@ -26,7 +26,7 @@ FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS ffmpeg-builder
 ARG FFMPEG_VERSION=n7.1.1
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-        git ca-certificates build-essential pkg-config nasm yasm \
+        git ca-certificates build-essential pkg-config nasm yasm clang \
         libx264-dev libx265-dev libnuma-dev zlib1g-dev \
         liblzma-dev libbz2-dev libzstd-dev \
     && rm -rf /var/lib/apt/lists/*
