@@ -115,7 +115,12 @@ RUN /opt/venv/bin/pip install --no-cache-dir boto3
 # 11.11.2026: iw3.download_models (ZoeD_Any_N ~1.34 ГБ) УДАЛЁН — дефолтную модель
 # никогда не используем (всегда явный --depth-model), а раздувание образа
 # ломало развёртывание на Qudata (таймаут ~15 мин). Any_V3_Mono грузим как раньше.
-RUN cd /opt/nunif && /opt/venv/bin/python -m iw3.update_hub
+# update_hub качает zipball'ы через api.github.com анонимно — с CI-раннера
+# иногда ловит rate-limit (KeyError: 'Authorization'). Повторяем с паузами.
+RUN cd /opt/nunif && ok=0 && for i in 1 2 3 4 5; do \
+        echo "update_hub: попытка $i"; \
+        /opt/venv/bin/python -m iw3.update_hub && ok=1 && break || sleep 30; \
+    done; [ "$ok" = 1 ] || { echo "update_hub не удался после 5 попыток" >&2; exit 1; }
 RUN cd /opt/nunif && /opt/venv/bin/python -c "from iw3.depth_model_factory import create_depth_model; m=create_depth_model('Any_V3_Mono'); m.load(gpu=-1); print('DA3 checkpoint:', m.get_model_path('Any_V3_Mono'))"
 
 # ---------- VDA_L (Video Depth Anything Large) ----------
