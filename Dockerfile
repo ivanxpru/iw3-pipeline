@@ -35,7 +35,7 @@ RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmp
     && make -C /build/nv-codec-headers install
 RUN cd /build/ffmpeg && ./configure \
         --prefix=/usr/local \
-        --enable-gpl --enable-version3 \
+        --enable-gpl --enable-version3 --enable-nonfree \
         --enable-cuda-nvcc --enable-cuda-llvm \
         --enable-cuvid --enable-nvenc --enable-nvdec \
         --enable-libx264 --enable-libx265 \
