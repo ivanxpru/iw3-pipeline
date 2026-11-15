@@ -16,12 +16,12 @@
 # Контекст сборки = КОРЕНЬ ЭТОЙ ПАПКИ (iw3-pipeline/), не родительский репо.
 #   docker build -f Dockerfile -t ivanxphub/iw3-pipeline:latest .
 
-# ---------- Стадия 1: сборка FFmpeg с nlmeans_cuda (появился в FFmpeg 7.1) ----------
-# apt-шный ffmpeg (Ubuntu 24.04 = 6.1) nlmeans_cuda НЕ имеет; CUDA-фильтры
-# требуют nvcc (devel-образ). Итоговый образ остаётся на лёгком -base:
-# рантайму CUDA-фильтров нужен только libcuda из драйвера хоста.
-# Собираем статически-ish (вбирает libx264/x265 через -dev пакеты, rpath не нужен —
-# ставим --prefix=/usr/local и копируем бинарь, либы переустанавливаем в финале).
+# ---------- Стадия 1: сборка FFmpeg с GPU-NLM (nlmeans_vulkan / nlmeans_opencl) ----------
+# Фильтра nlmeans_cuda в FFmpeg НЕ существует (проверено по апстриму/PR/форкам).
+# GPU-варианты NLM: nlmeans_vulkan (быстрее на NVIDIA) и nlmeans_opencl.
+# Vulkan-сборке нужен libshaderc (компиляция GLSL-компьют-шейдеров на лету).
+# Итоговый образ остаётся на лёгком -base: рантайму нужны libvulkan и ICD от
+# NVIDIA runtime (NVIDIA_DRIVER_CAPABILITIES=all монтирует nvidia_icd.json).
 FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS ffmpeg-builder
 ARG FFMPEG_VERSION=n7.1.1
 ARG DEBIAN_FRONTEND=noninteractive
@@ -29,6 +29,8 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         git ca-certificates build-essential pkg-config nasm yasm clang \
         libx264-dev libx265-dev libnuma-dev zlib1g-dev \
         liblzma-dev libbz2-dev libzstd-dev \
+        libvulkan-dev libshaderc-dev \
+        ocl-icd-opencl-dev opencl-headers \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmpeg.git /build/ffmpeg \
     && git clone --depth 1 https://git.videolan.org/git/ffmpeg/nv-codec-headers.git /build/nv-codec-headers \
@@ -38,6 +40,7 @@ RUN cd /build/ffmpeg && ./configure \
         --enable-gpl --enable-version3 --enable-nonfree \
         --enable-cuda-nvcc --enable-cuda-llvm \
         --enable-cuvid --enable-nvenc --enable-nvdec \
+        --enable-vulkan --enable-opencl \
         --enable-libx264 --enable-libx265 \
         --enable-zlib --enable-lzma --enable-bzlib \
         --extra-cflags=-I/usr/local/cuda/include \
@@ -74,6 +77,7 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         rsync tmux htop \
         libgl1 libglib2.0-0 \
         libx264-164 libx265-199 \
+        libvulkan1 libshaderc1 \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- FFmpeg с nlmeans_cuda (из стадии ffmpeg-builder) ----------
@@ -158,9 +162,10 @@ RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
 RUN cd /opt/nunif && /opt/venv/bin/python -c "import torch, av, sys; print('python:', sys.version.split()[0]); print('torch :', torch.__version__, 'cuda', torch.version.cuda); print('av    :', av.__version__); [print('codec', c, ':', c in av.codecs_available) for c in ('hevc_nvenc','h264_nvenc','libx265','libx264')]"
 RUN cd /opt/nunif && /opt/venv/bin/python -m iw3 -h >/dev/null && echo "iw3 CLI OK"
 
-# ---------- Sanity ffmpeg: nlmeans_cuda должен быть собран ----------
+# ---------- Sanity ffmpeg: GPU-NLM фильтры должны быть собраны ----------
 RUN /usr/local/bin/ffmpeg -version | head -1 && \
-    /usr/local/bin/ffmpeg -hide_banner -filters | grep -q nlmeans_cuda && echo "nlmeans_cuda: OK"
+    /usr/local/bin/ffmpeg -hide_banner -filters 2>/dev/null | grep -E "nlmeans_vulkan|nlmeans_opencl" && \
+    echo "GPU-NLM filters: OK"
 
 # ---------- Скрипты + структура ----------
 COPY scripts/ /opt/scripts/

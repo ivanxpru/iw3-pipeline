@@ -19,11 +19,13 @@
 #   - При почти чистом источнике: HQDN3D="2:1:3:2".
 # Настройка силы: HQDN3D="luma_spatial:chroma_spatial:luma_tmp:chroma_tmp"
 #
-# NLM_CUDA (14.11): GPU-денойз nlmeans_cuda (FFmpeg >= 7.1, собран в образе).
-#   NLM_CUDA=1 bash denoise-source.sh ...            # только nlmeans_cuda
-#   NLM_CUDA=1 NLM_CUDA_S=3.0 bash denoise-source.sh # сила (s=1..10, дефолт 1.0? см. ffmpeg -h filter=nlmeans_cuda)
-#   NLM_CUDA=1 HQDN3D="2:1:3:2" ...                  # nlmeans_cuda + лёгкий hqdn3d (A/B)
-# Цепочка: hwupload_cuda -> nlmeans_cuda -> hwdownload, формат pix_fmts=yuv420p.
+# NLM_GPU (14.11): GPU-денойз NLM. Фильтра nlmeans_cuda в FFmpeg НЕ существует;
+# GPU-варианты: nlmeans_vulkan (дефолт) и nlmeans_opencl.
+#   NLM_GPU=1 bash denoise-source.sh ...                 # nlmeans_vulkan
+#   NLM_GPU=1 NLM_FILTER=nlmeans_opencl ...              # другой бекенд
+#   NLM_GPU=1 NLM_S=3.0 ...                              # сила s (дефолт 3.0)
+#   NLM_GPU=1 HQDN3D="2:1:3:2" ...                       # NLM + лёгкий hqdn3d (A/B)
+# Цепочка: hwupload(derive_device=vulkan) -> nlmeans_vulkan -> hwdownload -> format=yuv420p.
 set -euo pipefail
 
 IN="${1:?Использование: denoise-source.sh INPUT.mp4 [OUTPUT.mp4]}"
@@ -35,16 +37,21 @@ OUT="${2:-${NAME}_denoised.mp4}"
 
 HQDN3D="${HQDN3D:-4:3:6:4.5}"
 
-# GPU-этап nlmeans_cuda (только если NLM_CUDA=1 и фильтр собран)
+# GPU-этап NLM (только если NLM_GPU=1 и фильтр собран)
 NLM_VF=""
-if [ "${NLM_CUDA:-0}" = "1" ]; then
-  if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q nlmeans_cuda; then
-    echo "ОШИБКА: nlmeans_cuda недоступен в этом ffmpeg (нужен образ iw3-pipeline >= этой версии)" >&2
+if [ "${NLM_GPU:-0}" = "1" ]; then
+  NLM_FILTER="${NLM_FILTER:-nlmeans_vulkan}"
+  if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q "$NLM_FILTER"; then
+    echo "ОШИБКА: $NLM_FILTER недоступен в этом ffmpeg (нужен образ iw3-pipeline >= этой версии)" >&2
     exit 1
   fi
-  NLM_S="${NLM_CUDA_S:-3.0}"
-  NLM_VF="hwupload_cuda,nlmeans_cuda=s=${NLM_S},hwdownload,format=yuv420p,"
-  echo "==> GPU-денойз: nlmeans_cuda s=${NLM_S}"
+  NLM_S="${NLM_S:-3.0}"
+  case "$NLM_FILTER" in
+    nlmeans_vulkan) NLM_VF="format=yuv420p,hwupload=derive_device=vulkan,nlmeans_vulkan=s=${NLM_S},hwdownload,format=yuv420p," ;;
+    nlmeans_opencl) NLM_VF="format=yuv420p,hwupload=derive_device=opencl,nlmeans_opencl=s=${NLM_S},hwdownload,format=yuv420p," ;;
+    *) echo "ОШИБКА: неизвестный NLM_FILTER=$NLM_FILTER" >&2; exit 1 ;;
+  esac
+  echo "==> GPU-денойз: $NLM_FILTER s=${NLM_S}"
 fi
 
 echo "==> Вход:      $IN"
