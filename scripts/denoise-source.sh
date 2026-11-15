@@ -18,6 +18,12 @@
 #   - При тяжёлом шуме: HQDN3D="8:6:12:9" (сильнее, но может мылить мелкую текстуру).
 #   - При почти чистом источнике: HQDN3D="2:1:3:2".
 # Настройка силы: HQDN3D="luma_spatial:chroma_spatial:luma_tmp:chroma_tmp"
+#
+# NLM_CUDA (14.11): GPU-денойз nlmeans_cuda (FFmpeg >= 7.1, собран в образе).
+#   NLM_CUDA=1 bash denoise-source.sh ...            # только nlmeans_cuda
+#   NLM_CUDA=1 NLM_CUDA_S=3.0 bash denoise-source.sh # сила (s=1..10, дефолт 1.0? см. ffmpeg -h filter=nlmeans_cuda)
+#   NLM_CUDA=1 HQDN3D="2:1:3:2" ...                  # nlmeans_cuda + лёгкий hqdn3d (A/B)
+# Цепочка: hwupload_cuda -> nlmeans_cuda -> hwdownload, формат pix_fmts=yuv420p.
 set -euo pipefail
 
 IN="${1:?Использование: denoise-source.sh INPUT.mp4 [OUTPUT.mp4]}"
@@ -29,9 +35,21 @@ OUT="${2:-${NAME}_denoised.mp4}"
 
 HQDN3D="${HQDN3D:-4:3:6:4.5}"
 
+# GPU-этап nlmeans_cuda (только если NLM_CUDA=1 и фильтр собран)
+NLM_VF=""
+if [ "${NLM_CUDA:-0}" = "1" ]; then
+  if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q nlmeans_cuda; then
+    echo "ОШИБКА: nlmeans_cuda недоступен в этом ffmpeg (нужен образ iw3-pipeline >= этой версии)" >&2
+    exit 1
+  fi
+  NLM_S="${NLM_CUDA_S:-3.0}"
+  NLM_VF="hwupload_cuda,nlmeans_cuda=s=${NLM_S},hwdownload,format=yuv420p,"
+  echo "==> GPU-денойз: nlmeans_cuda s=${NLM_S}"
+fi
+
 echo "==> Вход:      $IN"
 echo "==> Выход:     $OUT (lossless x264 qp=0)"
-echo "==> Фильтр:    hqdn3d=$HQDN3D"
+echo "==> Фильтр:    ${NLM_VF}hqdn3d=$HQDN3D"
 
 # Контроль источника
 ffprobe -v error -select_streams v:0 \
@@ -39,7 +57,7 @@ ffprobe -v error -select_streams v:0 \
   -of default=nw=1 "$IN"
 
 START=$(date +%s)
-ffmpeg -y -i "$IN" -vf "hqdn3d=${HQDN3D}" \
+ffmpeg -y -i "$IN" -vf "${NLM_VF}hqdn3d=${HQDN3D}" \
   -c:v libx264 -qp 0 -preset veryfast \
   -an "$OUT.part" 2> /dev/null
 mv "$OUT.part" "$OUT"

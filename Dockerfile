@@ -16,6 +16,35 @@
 # Контекст сборки = КОРЕНЬ ЭТОЙ ПАПКИ (iw3-pipeline/), не родительский репо.
 #   docker build -f Dockerfile -t ivanxphub/iw3-pipeline:latest .
 
+# ---------- Стадия 1: сборка FFmpeg с nlmeans_cuda (появился в FFmpeg 7.1) ----------
+# apt-шный ffmpeg (Ubuntu 24.04 = 6.1) nlmeans_cuda НЕ имеет; CUDA-фильтры
+# требуют nvcc (devel-образ). Итоговый образ остаётся на лёгком -base:
+# рантайму CUDA-фильтров нужен только libcuda из драйвера хоста.
+# Собираем статически-ish (вбирает libx264/x265 через -dev пакеты, rpath не нужен —
+# ставим --prefix=/usr/local и копируем бинарь, либы переустанавливаем в финале).
+FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS ffmpeg-builder
+ARG FFMPEG_VERSION=n7.1.1
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+        git ca-certificates build-essential pkg-config nasm yasm \
+        libx264-dev libx265-dev libnuma-dev zlib1g-dev \
+        liblzma-dev libbz2-dev libzstd-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmpeg.git /build/ffmpeg \
+    && git clone --depth 1 https://git.videolan.org/git/ffmpeg/nv-codec-headers.git /build/nv-codec-headers \
+    && make -C /build/nv-codec-headers install
+RUN cd /build/ffmpeg && ./configure \
+        --prefix=/usr/local \
+        --enable-gpl --enable-version3 \
+        --enable-cuda-nvcc --enable-cuda-llvm --enable-libcuda \
+        --enable-cuvid --enable-nvenc --enable-nvdec \
+        --enable-libx264 --enable-libx265 \
+        --enable-zlib --enable-lzma --enable-bzlib \
+        --extra-cflags=-I/usr/local/cuda/include \
+        --extra-ldflags=-L/usr/local/cuda/lib64/stubs \
+    && make -j"$(nproc)" && make install
+
+# ---------- Финальная стадия: как раньше, база -base ----------
 FROM nvidia/cuda:12.6.3-base-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -44,8 +73,13 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         git wget curl ca-certificates \
         rsync tmux htop \
         libgl1 libglib2.0-0 \
-        ffmpeg \
+        libx264-164 libx265-199 \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------- FFmpeg с nlmeans_cuda (из стадии ffmpeg-builder) ----------
+# Подменяет apt-шный (6.1, без CUDA-фильтров). Ставим ПЕРВЫМ по PATH: /usr/local/bin.
+COPY --from=ffmpeg-builder /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-builder /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 
 # ---------- Репозиторий nunif (пин коммита, разобранного 07.11.2026) ----------
 RUN git clone --depth 1 https://github.com/nagadomi/nunif.git /opt/nunif
@@ -123,6 +157,10 @@ RUN mkdir -p /opt/iw3-home/iw3/pretrained_models/hub/checkpoints && \
 # ---------- Sanity на этапе сборки (CUDA недоступна, проверяем импорты/кодеки) ----------
 RUN cd /opt/nunif && /opt/venv/bin/python -c "import torch, av, sys; print('python:', sys.version.split()[0]); print('torch :', torch.__version__, 'cuda', torch.version.cuda); print('av    :', av.__version__); [print('codec', c, ':', c in av.codecs_available) for c in ('hevc_nvenc','h264_nvenc','libx265','libx264')]"
 RUN cd /opt/nunif && /opt/venv/bin/python -m iw3 -h >/dev/null && echo "iw3 CLI OK"
+
+# ---------- Sanity ffmpeg: nlmeans_cuda должен быть собран ----------
+RUN /usr/local/bin/ffmpeg -version | head -1 && \
+    /usr/local/bin/ffmpeg -hide_banner -filters | grep -q nlmeans_cuda && echo "nlmeans_cuda: OK"
 
 # ---------- Скрипты + структура ----------
 COPY scripts/ /opt/scripts/
