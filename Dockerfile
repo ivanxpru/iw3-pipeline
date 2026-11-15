@@ -84,7 +84,7 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         rsync tmux htop \
         libgl1 libglib2.0-0 \
         libx264-164 libx265-199 \
-        libvulkan1 libshaderc1 \
+        libvulkan1 libshaderc1 libopencl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------- FFmpeg с nlmeans_cuda (из стадии ffmpeg-builder) ----------
