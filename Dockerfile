@@ -29,21 +29,28 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
         git ca-certificates build-essential pkg-config nasm yasm clang \
         libx264-dev libx265-dev libnuma-dev zlib1g-dev \
         liblzma-dev libbz2-dev libzstd-dev \
-        libvulkan-dev libshaderc-dev \
+        libvulkan-dev libshaderc-dev cmake \
         ocl-icd-opencl-dev opencl-headers \
     && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmpeg.git /build/ffmpeg \
     && git clone --depth 1 https://git.videolan.org/git/ffmpeg/nv-codec-headers.git /build/nv-codec-headers \
     && make -C /build/nv-codec-headers install
+# Заголовки Vulkan >= 1.3.277 (требование ffmpeg 7.1); в Ubuntu 24.04 старее —
+# ставим свежие из KhronosGroup/Vulkan-Headers (headers-only).
+RUN git clone --depth 1 --branch v1.3.290 https://github.com/KhronosGroup/Vulkan-Headers.git /build/vulkan-headers \
+    && cmake -S /build/vulkan-headers -B /build/vulkan-headers/build \
+             -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_TESTS=OFF \
+    && cmake --install /build/vulkan-headers/build
 RUN cd /build/ffmpeg && ./configure \
         --prefix=/usr/local \
         --enable-gpl --enable-version3 --enable-nonfree \
         --enable-cuda-nvcc --enable-cuda-llvm \
         --enable-cuvid --enable-nvenc --enable-nvdec \
-        --enable-vulkan --enable-opencl \
+        --enable-vulkan --enable-opencl --enable-libshaderc \
         --enable-libx264 --enable-libx265 \
         --enable-zlib --enable-lzma --enable-bzlib \
         --extra-cflags=-I/usr/local/cuda/include \
+        --extra-cflags=-I/usr/local/include \
         --extra-ldflags=-L/usr/local/cuda/lib64/stubs \
     && make -j"$(nproc)" && make install
 
