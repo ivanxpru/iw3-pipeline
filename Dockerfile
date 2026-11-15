@@ -36,7 +36,7 @@ RUN git clone --depth 1 --branch "${FFMPEG_VERSION}" https://git.ffmpeg.org/ffmp
 RUN cd /build/ffmpeg && ./configure \
         --prefix=/usr/local \
         --enable-gpl --enable-version3 \
-        --enable-cuda-nvcc --enable-cuda-llvm --enable-libcuda \
+        --enable-cuda-nvcc --enable-cuda-llvm \
         --enable-cuvid --enable-nvenc --enable-nvdec \
         --enable-libx264 --enable-libx265 \
         --enable-zlib --enable-lzma --enable-bzlib \
